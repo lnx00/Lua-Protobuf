@@ -15,12 +15,29 @@ local E_WireType = {
     Fixed32 = 5
 }
 
-local function updateValue(valueTable, fieldNumber, value)
-    if valueTable[fieldNumber] then
-        if type(valueTable[fieldNumber]) == "table" then
-            table.insert(valueTable[fieldNumber], value)
+local function printTable(table, indent)
+    indent = indent or 0
+
+    for key, value in pairs(table) do
+        if type(value) == "table" then
+            print(string.rep(" ", indent) .. key .. " = {")
+            printTable(value, indent + 2)
+            print(string.rep(" ", indent) .. "}")
+        elseif type(value) == "string" then
+            print(string.rep(" ", indent) .. key .. " = \"" .. value .. "\"")
         else
-            valueTable[fieldNumber] = {valueTable[fieldNumber], value}
+            print(string.rep(" ", indent) .. key .. " = " .. value)
+        end
+    end
+end
+
+local function updateValue(valueTable, fieldNumber, value)
+    local curValue = valueTable[fieldNumber]
+    if curValue then
+        if type(curValue) == "table" then
+            table.insert(curValue, value)
+        else
+            valueTable[fieldNumber] = { curValue, value }
         end
     else
         valueTable[fieldNumber] = value
@@ -30,7 +47,7 @@ end
 local function get32bit(data, offset)
     local value, toByte = 0, string.byte
     value = toByte(data, offset) | (toByte(data, offset + 1) << 8) | (toByte(data, offset + 2) << 16) |
-    (toByte(data, offset + 3) << 24)
+        (toByte(data, offset + 3) << 24)
     return value
 end
 
@@ -70,6 +87,8 @@ local function decodeLengthDelimited(data, offset)
     return value, offset
 end
 
+---@param data string
+---@param offset integer
 local function decodeProtobuf(data, offset)
     local tag, fieldNumber, wireType = 0, 0, 0
     local result = {}
@@ -81,36 +100,29 @@ local function decodeProtobuf(data, offset)
         fieldNumber = tag >> 3
         wireType = tag & 0x07
 
+        -- Decode the value
         if wireType == E_WireType.Varint then
             value, offset = decodeVarint(data, offset)
             updateValue(result, fieldNumber, value)
-
-            --print(string.format("Varint: %d (offset: %d)", value, offset))
         elseif wireType == E_WireType.Fixed64 then
             value, offset = decodeFixed64(data, offset)
             updateValue(result, fieldNumber, value)
-
-            --print(string.format("Fixed64: %d (offset: %d)", value, offset))
         elseif wireType == E_WireType.LengthDelimited then
             value, offset = decodeLengthDelimited(data, offset)
+
+            -- Sub protobuf message
             if string.byte(value, 1) == 0x0A then
-                Protobuf.Dump(value)
                 value = decodeProtobuf(value, 1)
             end
-            updateValue(result, fieldNumber, value)
 
-            --print(string.format("Length delimited: %s (offset: %d)", value, offset))
+            updateValue(result, fieldNumber, value)
         elseif wireType == E_WireType.StartGroup then
             offset = offset + 1
-            print(string.format("Start group: %d (offset: %d)", fieldNumber, offset))
         elseif wireType == E_WireType.EndGroup then
             offset = offset + 1
-            print(string.format("End group: %d (offset: %d)", fieldNumber, offset))
         elseif wireType == E_WireType.Fixed32 then
             value, offset = decodeFixed32(data, offset)
             updateValue(result, fieldNumber, value)
-
-            --print(string.format("Fixed32: %d (offset: %d)", value, offset))
         else
             print("Unknown wire type: " .. wireType)
             break
