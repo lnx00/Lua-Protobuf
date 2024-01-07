@@ -15,26 +15,32 @@ local E_WireType = {
     Fixed32 = 5
 }
 
----@param valueTable table<integer, any>
+---Inserts new values or appends repeated values to the table
+---@param valueTable table
 ---@param fieldNumber integer
 ---@param value any
 local function updateValue(valueTable, fieldNumber, value)
     local curValue = valueTable[fieldNumber]
 
     if curValue then
-        -- Append the value (Repeated field)
         if type(curValue) == "table" and curValue._type == "repeated" then
+            -- Append to repeated value
             table.insert(curValue, value)
         else
+            -- Convert to repeated value
             valueTable[fieldNumber] = { curValue, value }
             valueTable[fieldNumber]._type = "repeated"
         end
     else
-        -- Insert the new value
+        -- Insert new value
         valueTable[fieldNumber] = value
+        valueTable._size = (valueTable._size or 0) + 1
     end
 end
 
+---Returns a 32 bit integer from the data
+---@param data string
+---@param offset integer
 local function get32bit(data, offset)
     local value, toByte = 0, string.byte
     value = toByte(data, offset) | (toByte(data, offset + 1) << 8) | (toByte(data, offset + 2) << 16) |
@@ -42,6 +48,9 @@ local function get32bit(data, offset)
     return value
 end
 
+---Decodes a varint value
+---@param data string
+---@param offset integer
 local function decodeVarint(data, offset)
     local value, shift = 0, 0
 
@@ -55,10 +64,16 @@ local function decodeVarint(data, offset)
     return value, offset
 end
 
+---Decodes a 32 bit fixed value
+---@param data string
+---@param offset integer
 local function decodeFixed32(data, offset)
     return get32bit(data, offset), offset + 4
 end
 
+---Decodes a 64 bit fixed value
+---@param data string
+---@param offset integer
 local function decodeFixed64(data, offset)
     local value = get32bit(data, offset)
     offset = offset + 4
@@ -68,6 +83,10 @@ local function decodeFixed64(data, offset)
     return value, offset
 end
 
+---Decodes a length delimited value
+---This is used for strings and sub protobuf messages
+---@param data string
+---@param offset integer
 local function decodeLengthDelimited(data, offset)
     local length = 0
     length, offset = decodeVarint(data, offset)
@@ -78,6 +97,7 @@ local function decodeLengthDelimited(data, offset)
     return value, offset
 end
 
+---Decodes a protobuf message
 ---@param data string
 ---@param offset integer
 local function decodeProtobuf(data, offset)
@@ -135,6 +155,7 @@ end
 
 ---Dumps the data in hex format
 ---@param data string
+---@return string
 function Protobuf.Dump(data)
     local bytes = {}
     for i = 1, #data do
@@ -142,7 +163,7 @@ function Protobuf.Dump(data)
         bytes[i] = string.format("%02X", byte)
     end
 
-    print(table.concat(bytes, " "))
+    return table.concat(bytes, " ")
 end
 
 return Protobuf
