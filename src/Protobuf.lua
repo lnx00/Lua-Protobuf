@@ -26,10 +26,13 @@ local function updateValue(valueTable, fieldNumber, value)
         if type(curValue) == "table" and curValue._type == "repeated" then
             -- Append to repeated value
             table.insert(curValue, value)
+            curValue._size = curValue._size + 1
         else
             -- Convert to repeated value
-            valueTable[fieldNumber] = { curValue, value }
-            valueTable[fieldNumber]._type = "repeated"
+            local newValue = {curValue, value}
+            newValue._type = "repeated"
+            newValue._size = 2
+            valueTable[fieldNumber] = newValue
         end
     else
         -- Insert new value
