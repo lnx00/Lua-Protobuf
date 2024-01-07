@@ -15,31 +15,22 @@ local E_WireType = {
     Fixed32 = 5
 }
 
-local function printTable(table, indent)
-    indent = indent or 0
-
-    for key, value in pairs(table) do
-        if type(value) == "table" then
-            print(string.rep(" ", indent) .. key .. " = {")
-            printTable(value, indent + 2)
-            print(string.rep(" ", indent) .. "}")
-        elseif type(value) == "string" then
-            print(string.rep(" ", indent) .. key .. " = \"" .. value .. "\"")
-        else
-            print(string.rep(" ", indent) .. key .. " = " .. value)
-        end
-    end
-end
-
+---@param valueTable table<integer, any>
+---@param fieldNumber integer
+---@param value any
 local function updateValue(valueTable, fieldNumber, value)
     local curValue = valueTable[fieldNumber]
+
     if curValue then
-        if type(curValue) == "table" then
+        -- Append the value (Repeated field)
+        if type(curValue) == "table" and curValue._type == "repeated" then
             table.insert(curValue, value)
         else
             valueTable[fieldNumber] = { curValue, value }
+            valueTable[fieldNumber]._type = "repeated"
         end
     else
+        -- Insert the new value
         valueTable[fieldNumber] = value
     end
 end
@@ -129,9 +120,11 @@ local function decodeProtobuf(data, offset)
         end
     end
 
+    result._type = "protobuf"
     return result
 end
 
+---Decodes a protobuf message and returns a table with the values
 ---@param data string
 ---@param offset? integer
 ---@return table<integer, any>
