@@ -67,6 +67,24 @@ local function decodeVarint(data, offset)
     return value, offset
 end
 
+local function encodeVarint(value)
+    local result = {}
+    local byte = 0
+
+    repeat
+        byte = value & 0x7F
+        value = value >> 7
+
+        if value > 0 then
+            byte = byte | 0x80
+        end
+
+        table.insert(result, string.char(byte))
+    until value == 0
+
+    return table.concat(result)
+end
+
 ---Decodes a 32 bit fixed value
 ---@param data string
 ---@param offset integer
@@ -147,13 +165,62 @@ local function decodeProtobuf(data, offset)
     return result
 end
 
+---@param data table
+---@return string?, string?
+local function encodeProtobuf(data)
+    local result = {}
+
+    for fieldNumber, value in pairs(data) do
+        if not tonumber(fieldNumber) then
+            goto continue
+        end
+
+        if type(value) == "number" then
+            local tag = (fieldNumber << 3) | E_WireType.Varint
+            table.insert(result, encodeVarint(tag))
+            table.insert(result, encodeVarint(value))
+        elseif type(value) == "string" then
+            local tag = (fieldNumber << 3) | E_WireType.LengthDelimited
+            table.insert(result, encodeVarint(tag))
+            table.insert(result, encodeVarint(#value))
+            table.insert(result, value)
+        elseif type(value) == "table" then
+            if value._type == "repeated" then
+                local subSize = value._size or #value
+                for i = 1, subSize do
+                    local tag = (fieldNumber << 3) | E_WireType.Varint
+                    table.insert(result, encodeVarint(tag))
+                    table.insert(result, encodeVarint(value[i]))
+                end
+            elseif value._type == "protobuf" then
+                local tag = (fieldNumber << 3) | E_WireType.LengthDelimited
+                table.insert(result, encodeVarint(tag))
+                table.insert(result, encodeProtobuf(value))
+            else
+                return nil, "Unspecified sub table type"
+            end
+        end
+        
+        ::continue::
+    end
+
+    return table.concat(result)
+end
+
 ---Decodes a protobuf message and returns a table with the values
 ---@param data string
 ---@param offset? integer
----@return table<integer, any>
+---@return table<integer, any> result
 function Protobuf.Decode(data, offset)
     offset = offset or 1
     return decodeProtobuf(data, offset)
+end
+
+---(Experimental) Encodes a table into a protobuf message
+---@param data table
+---@return string? result, string? error
+function Protobuf.Encode(data)
+    return encodeProtobuf(data)
 end
 
 ---Dumps the data in hex format
