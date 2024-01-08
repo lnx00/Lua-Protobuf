@@ -41,16 +41,6 @@ local function updateValue(valueTable, fieldNumber, value)
     end
 end
 
----Returns a 32 bit integer from the data
----@param data string
----@param offset integer
-local function get32bit(data, offset)
-    local value, toByte = 0, string.byte
-    value = toByte(data, offset) | (toByte(data, offset + 1) << 8) | (toByte(data, offset + 2) << 16) |
-        (toByte(data, offset + 3) << 24)
-    return value
-end
-
 ---Decodes a varint value
 ---@param data string
 ---@param offset integer
@@ -89,19 +79,14 @@ end
 ---@param data string
 ---@param offset integer
 local function decodeFixed32(data, offset)
-    return get32bit(data, offset), offset + 4
+    return string.unpack("<I4", data, offset), offset + 4
 end
 
 ---Decodes a 64 bit fixed value
 ---@param data string
 ---@param offset integer
 local function decodeFixed64(data, offset)
-    local value = get32bit(data, offset)
-    offset = offset + 4
-    value = value | (get32bit(data, offset) << 32)
-    offset = offset + 4
-
-    return value, offset
+    return string.unpack("<I8", data, offset), offset + 8
 end
 
 ---Decodes a length delimited value
