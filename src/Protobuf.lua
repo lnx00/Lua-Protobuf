@@ -29,7 +29,7 @@ local function updateValue(valueTable, fieldNumber, value)
             curValue._size = curValue._size + 1
         else
             -- Convert to repeated value
-            local newValue = {curValue, value}
+            local newValue = { curValue, value }
             newValue._type = "repeated"
             newValue._size = 2
             valueTable[fieldNumber] = newValue
@@ -121,6 +121,7 @@ end
 ---Decodes a protobuf message
 ---@param data string
 ---@param offset integer
+---@return table? result, string? error
 local function decodeProtobuf(data, offset)
     local tag, fieldNumber, wireType = 0, 0, 0
     local result = {}
@@ -144,7 +145,9 @@ local function decodeProtobuf(data, offset)
 
             -- Sub protobuf message
             if string.byte(value, 1) == 0x0A then
-                value = decodeProtobuf(value, 1)
+                local errorMsg = nil
+                value, errorMsg = decodeProtobuf(value, 1)
+                if value == nil then return nil, errorMsg end
             end
 
             updateValue(result, fieldNumber, value)
@@ -156,8 +159,7 @@ local function decodeProtobuf(data, offset)
             value, offset = decodeFixed32(data, offset)
             updateValue(result, fieldNumber, value)
         else
-            print("Unknown wire type: " .. wireType)
-            break
+            return nil, "Unknown wire type: " .. wireType
         end
     end
 
@@ -200,7 +202,7 @@ local function encodeProtobuf(data)
                 return nil, "Unspecified sub table type"
             end
         end
-        
+
         ::continue::
     end
 
@@ -210,7 +212,7 @@ end
 ---Decodes a protobuf message and returns a table with the values
 ---@param data string
 ---@param offset? integer
----@return table<integer, any> result
+---@return table? result, string? error
 function Protobuf.Decode(data, offset)
     offset = offset or 1
     return decodeProtobuf(data, offset)
